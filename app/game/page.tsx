@@ -1,154 +1,223 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
-type Level = {
-  width: number;
-  height: number;
-  npcs: { id: string; x: number; y: number; dialog: string }[];
-  exitLineY: number;
-};
-
+type NPC = { id: string; x: number; y: number; dialogKey: string };
+type Level = { width: number; height: number; npcs: NPC[] };
 type GameState = {
+  id?: number;
   name: string;
   team: string[];
   x: number;
   y: number;
-  hasChallengedBilly?: boolean;
 };
 
 export default function GamePage() {
   const [level, setLevel] = useState<Level | null>(null);
   const [state, setState] = useState<GameState | null>(null);
   const [tileSize, setTileSize] = useState(32);
+  const [direction, setDirection] = useState<
+    "front" | "back" | "left" | "right"
+  >("front");
+  const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Chargement carte + état
+  const [inDialog, setInDialog] = useState(false);
+  const [dialogLines, setDialogLines] = useState<string[]>([]);
+  const [dialogIndex, setDialogIndex] = useState(0);
+  const [currentNpcId, setCurrentNpcId] = useState<string | null>(null);
+
+  // 1) Chargement carte + état
   useEffect(() => {
     Promise.all([
       fetch("/levels/station.json").then((r) => r.json()),
       Promise.resolve(JSON.parse(localStorage.getItem("gameState") || "null")),
-    ]).then(([lvl, savedState]) => {
+    ]).then(([lvl, gs]) => {
       setLevel(lvl);
-      setState({ ...savedState, hasChallengedBilly: false });
+      setState(gs);
     });
   }, []);
 
-  // Calcul dynamique de tileSize
+  // 2) Dimensionnement dynamique
   useEffect(() => {
     if (!level) return;
-    const handleResize = () => {
-      const maxW = window.innerWidth / level.width;
-      const maxH = window.innerHeight / level.height;
-      setTileSize(Math.floor(Math.min(maxW, maxH)));
+    const onResize = () => {
+      const w = window.innerWidth / level.width;
+      const h = window.innerHeight / level.height;
+      setTileSize(Math.floor(Math.min(w, h)));
     };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, [level]);
 
-  // Gestion des touches
+  // 3) Lecture musique sur interaction
+  useEffect(() => {
+    const unlockAudio = () => {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.volume = 0.4;
+        audio.play().catch(() => {});
+      }
+      window.removeEventListener("click", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+    // Tentative d'autoplay
+    unlockAudio();
+    // Si bloqué, on réessaie au premier click ou touche
+    window.addEventListener("click", unlockAudio);
+    window.addEventListener("keydown", unlockAudio);
+    return () => {
+      window.removeEventListener("click", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+  }, []);
+
+  // 4) Clavier (déplacement + dialogue)
   useEffect(() => {
     if (!level || !state) return;
-
     const handleKey = (e: KeyboardEvent) => {
-      let nx = state.x;
-      let ny = state.y;
+      // gestion dialogue...
+      if (inDialog) {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          const next = dialogIndex + 1;
+          if (next < dialogLines.length) {
+            setDialogIndex(next);
+          } else {
+            setInDialog(false);
+            setDialogLines([]);
+            setDialogIndex(0);
+            if (currentNpcId === "billy") {
+              setTimeout(() => (window.location.href = "/battle"), 300);
+            }
+            setCurrentNpcId(null);
+          }
+        }
+        return;
+      }
 
+      let nx = state.x,
+        ny = state.y;
       switch (e.key) {
         case "ArrowUp":
+          setDirection("back");
           ny--;
           break;
         case "ArrowDown":
+          setDirection("front");
           ny++;
           break;
         case "ArrowLeft":
+          setDirection("left");
           nx--;
           break;
         case "ArrowRight":
+          setDirection("right");
           nx++;
           break;
         case "p":
         case "P":
-          // Sauvegarde
           fetch("/api/save", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(state),
+            body: JSON.stringify({
+              id: state.id,
+              name: state.name,
+              x: state.x,
+              y: state.y,
+              team: state.team,
+            }),
           }).then(() => alert("Partie sauvegardée"));
           return;
         case " ":
-          // Interaction PNJ
           const npc = level.npcs.find(
             (n) => Math.abs(n.x - state.x) + Math.abs(n.y - state.y) === 1
           );
-          if (npc?.id === "billy") {
-            setState((s) => s && { ...s, hasChallengedBilly: true });
-            alert("Billy : Hé toi, je te défie !");
-          } else if (npc) {
-            alert(`Dialogue ${npc.id}`);
+          if (npc) {
+            setCurrentNpcId(npc.id);
+            fetch("/levels/dialogs.json")
+              .then((r) => r.json())
+              .then((dialogs: Record<string, string[]>) => {
+                const lines = dialogs[npc.dialogKey] || [`...${npc.id}`];
+                setDialogLines(lines);
+                setDialogIndex(0);
+                setInDialog(true);
+              });
           }
           return;
         default:
           return;
       }
-
-      // Vérifier limites
       if (nx < 0 || ny < 0 || nx >= level.width || ny >= level.height) return;
-
-      // Si sorti dehors après défi, lancer combat
-      if (ny < level.exitLineY && state.hasChallengedBilly) {
-        window.location.href = "/battle";
-        return;
-      }
-
-      // Mettre à jour position
       setState((s) => s && { ...s, x: nx, y: ny });
     };
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [level, state]);
+  }, [level, state, inDialog, dialogIndex, dialogLines, currentNpcId]);
 
   if (!level || !state) return <div>Chargement…</div>;
 
   const mapW = level.width * tileSize;
   const mapH = level.height * tileSize;
+  const spriteUrl = `/sprites/hero_walk_${direction}.gif`;
+  const spriteSize = tileSize * 2;
 
   return (
-    <div className="flex items-center justify-center w-screen h-screen bg-black overflow-hidden">
-      <div className="relative" style={{ width: mapW, height: mapH }}>
-        {/* Fond de carte */}
+    <div className="relative w-screen h-screen bg-black overflow-hidden">
+      <audio ref={audioRef} src="/audio/Station_service.mp3" loop autoPlay />
+
+      <div className="relative mx-auto" style={{ width: mapW, height: mapH }}>
         <img
           src="/images/station_service_intérieur.png"
           alt="Station Service"
-          className="absolute top-0 left-0 w-full h-full"
+          className="absolute inset-0 w-full h-full"
         />
 
-        {/* Joueur */}
-        <div
-          className="absolute bg-blue-500"
+        <img
+          src="/sprites/Nidoqueen.gif"
+          alt="TV Screen"
+          className="absolute"
           style={{
-            width: tileSize * 0.8,
-            height: tileSize * 0.8,
-            top: state.y * tileSize + tileSize * 0.1,
-            left: state.x * tileSize + tileSize * 0.1,
-            transition: "top 0.1s, left 0.1s",
+            left: tileSize * 4.6,
+            top: tileSize * 2.1,
+            width: tileSize * 3.9,
+            height: tileSize * 2.5,
           }}
         />
 
-        {/* PNJ */}
+        <img
+          src={spriteUrl}
+          alt="Joueur"
+          className="absolute"
+          style={{
+            width: spriteSize,
+            height: spriteSize,
+            left: state.x * tileSize + (tileSize - spriteSize) / 2,
+            top: state.y * tileSize + (tileSize - spriteSize) / 2,
+            transition: "left 0.1s, top 0.1s",
+          }}
+        />
+
         {level.npcs.map((n) => (
           <div
             key={n.id}
-            className="absolute bg-red-500"
+            className="absolute opacity-0"
             style={{
               width: tileSize * 0.8,
               height: tileSize * 0.8,
-              top: n.y * tileSize + tileSize * 0.1,
               left: n.x * tileSize + tileSize * 0.1,
+              top: n.y * tileSize + tileSize * 0.1,
             }}
           />
         ))}
+
+        {inDialog && (
+          <div className="absolute bottom-0 w-full bg-black bg-opacity-75 p-4 text-white">
+            <p>{dialogLines[dialogIndex]}</p>
+            <p className="text-sm text-gray-400 mt-2">[Appuyez sur Entrée]</p>
+          </div>
+        )}
       </div>
     </div>
   );

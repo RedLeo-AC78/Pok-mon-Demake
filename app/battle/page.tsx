@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 type PokeData = {
   name: string;
@@ -20,6 +20,7 @@ type Combatant = {
 };
 
 export default function BattlePage() {
+  // — Hooks d’état
   const [playerTeam, setPlayerTeam] = useState<Combatant[]>([]);
   const [billyTeam, setBillyTeam] = useState<Combatant[]>([]);
   const [curPlayerIdx, setCurPlayerIdx] = useState(0);
@@ -27,14 +28,35 @@ export default function BattlePage() {
   const [turn, setTurn] = useState<"player" | "opponent">("player");
   const [log, setLog] = useState<string[]>([]);
 
-  // Calcul PV et dégâts
+  // Audio de combat
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Helper redirection fin de combat
+  function finishBattle() {
+    setTimeout(() => (window.location.href = "/end"), 2000);
+  }
+
+  // Calculs
   const calcHp = (baseHp: number) =>
     Math.floor((baseHp * 2 * 25) / 100) + 25 + 10;
   const computeDamage = (atk: number, def: number, power: number) =>
     Math.max(1, Math.floor((((atk * power) / def) * 25) / 50) + 2);
 
-  // Initialisation
+  // 1) Initialisation et musique
   useEffect(() => {
+    const audio = audioRef.current;
+    const unlock = () => {
+      if (audio) {
+        audio.volume = 0.4;
+        audio.play().catch(() => {});
+      }
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    unlock();
+    window.addEventListener("click", unlock);
+    window.addEventListener("keydown", unlock);
+
     (async () => {
       const gs = JSON.parse(localStorage.getItem("gameState") || "null");
       const billys = ["zigzagoon", "linoone"];
@@ -52,31 +74,81 @@ export default function BattlePage() {
           r.json()
         ),
       ]);
-
       const build = (data: PokeData): Combatant => {
         const baseHp = data.stats.find((s) => s.stat.name === "hp")!.base_stat;
         const maxHp = calcHp(baseHp);
-        const avail = data.moves
+        const moves = data.moves
           .filter((m) =>
             m.version_group_details.some((v) => v.level_learned_at <= 25)
           )
-          .map((m) => m.move.name);
-        const moves = avail.slice(0, 2).map((name) => ({ name, power: 40 }));
+          .map((m) => m.move.name)
+          .slice(0, 2)
+          .map((name) => ({ name, power: 40 }));
         return { data, currentHp: maxHp, maxHp, moves };
       };
-
       setPlayerTeam([build(p1), build(p2)]);
       setBillyTeam([build(b1), build(b2)]);
       setLog([`Un ${b1.name} sauvage apparaît !`]);
     })();
+
+    return () => {
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
   }, []);
 
-  const curPlayer = playerTeam[curPlayerIdx];
-  const curOpp = billyTeam[curOppIdx];
+  // 2) Tour de Billy
+  useEffect(() => {
+    if (turn !== "opponent") return;
+    const curOpp = billyTeam[curOppIdx];
+    const curPlayer = playerTeam[curPlayerIdx];
+    if (!curOpp || curOpp.currentHp === 0 || !curPlayer) return;
 
-  // Tour du joueur
-  const handlePlayerMove = (i: number) => {
-    if (turn !== "player" || !curPlayer || !curOpp) return;
+    const t = setTimeout(() => {
+      const move = curOpp.moves[0];
+      const atk = curOpp.data.stats.find(
+        (s) => s.stat.name === "attack"
+      )!.base_stat;
+      const def = curPlayer.data.stats.find(
+        (s) => s.stat.name === "defense"
+      )!.base_stat;
+      const dmg = computeDamage(atk, def, move.power);
+
+      curPlayer.currentHp = Math.max(0, curPlayer.currentHp - dmg);
+      setPlayerTeam([...playerTeam]);
+      setLog((l) => [
+        ...l,
+        `Billy utilise ${move.name} et inflige ${dmg} dégâts !`,
+      ]);
+
+      if (curPlayer.currentHp === 0) {
+        // switch vers le second Pokémon si possible
+        if (curPlayerIdx < playerTeam.length - 1) {
+          setLog((l) => [
+            ...l,
+            `${playerTeam[curPlayerIdx].data.name} est K.O.! Votre ${
+              playerTeam[curPlayerIdx + 1].data.name
+            } entre en jeu!`,
+          ]);
+          setCurPlayerIdx((idx) => idx + 1);
+        } else {
+          setLog((l) => [...l, "Vous êtes vaincu…"]);
+          finishBattle();
+        }
+      }
+
+      setTurn("player");
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [turn, curOppIdx, playerTeam, billyTeam, curPlayerIdx]);
+
+  // 3) Fonction de clic sur les attaques
+  function handlePlayerMove(i: number) {
+    if (turn !== "player") return;
+    const curPlayer = playerTeam[curPlayerIdx];
+    const curOpp = billyTeam[curOppIdx];
+    if (!curPlayer || !curOpp) return;
+
     const move = curPlayer.moves[i];
     const atk = curPlayer.data.stats.find(
       (s) => s.stat.name === "attack"
@@ -90,7 +162,7 @@ export default function BattlePage() {
     setBillyTeam([...billyTeam]);
     setLog((l) => [
       ...l,
-      `${curPlayer.data.name} utilise ${move.name}, ${dmg} dégâts !`,
+      `${curPlayer.data.name} utilise ${move.name} et inflige ${dmg} dégâts !`,
     ]);
 
     if (curOpp.currentHp === 0) {
@@ -102,67 +174,46 @@ export default function BattlePage() {
         setCurOppIdx((idx) => idx + 1);
       } else {
         setLog((l) => [...l, "Victoire !"]);
+        finishBattle();
       }
     }
     setTurn("opponent");
-  };
+  }
 
-  // Tour de l’adversaire
-  useEffect(() => {
-    if (turn !== "opponent" || !curOpp || curOpp.currentHp === 0) return;
-    const t = setTimeout(() => {
-      const move = curOpp.moves[0];
-      const atk = curOpp.data.stats.find(
-        (s) => s.stat.name === "attack"
-      )!.base_stat;
-      const def = curPlayer!.data.stats.find(
-        (s) => s.stat.name === "defense"
-      )!.base_stat;
-      const dmg = computeDamage(atk, def, move.power);
+  // 4) Rendu
+  const curPlayer = playerTeam[curPlayerIdx];
+  const curOpp = billyTeam[curOppIdx];
+  if (!curPlayer || !curOpp) return <div>Préparation…</div>;
 
-      curPlayer!.currentHp = Math.max(0, curPlayer!.currentHp - dmg);
-      setPlayerTeam([...playerTeam]);
-      setLog((l) => [...l, `Billy utilise ${move.name}, ${dmg} dégâts !`]);
-      if (curPlayer!.currentHp === 0)
-        setLog((l) => [...l, "Vous êtes vaincu…"]);
-      setTurn("player");
-    }, 1000);
-    return () => clearTimeout(t);
-  }, [turn, curOppIdx, playerTeam, billyTeam]);
-
-  if (!curPlayer || !curOpp) return <div>Préparation du combat…</div>;
-
-  // Styles à ajuster si nécessaire
   const spriteSize = 96;
   const oppStyle = {
     position: "absolute" as const,
-    left: "65%",
-    top: "43%",
-    width: `150px`,
-    height: `150px`,
-    transform: "translate(-50%, -50%)",
+    left: "60%",
+    top: "18%",
+    width: `${spriteSize}px`,
+    height: `${spriteSize}px`,
+    transform: "translate(-50%,-50%)",
   };
   const playerStyle = {
     position: "absolute" as const,
-    left: "28%",
-    top: "58%",
-    width: `150px`,
-    height: `150px`,
-    transform: "translate(-50%, -50%)",
+    left: "25%",
+    top: "62%",
+    width: `${spriteSize}px`,
+    height: `${spriteSize}px`,
+    transform: "translate(-50%,-50%)",
   };
 
   return (
     <div className="flex items-center justify-center w-screen h-screen bg-black overflow-hidden">
-      {/* Conteneur 16:9 pour le fond */}
+      <audio ref={audioRef} src="/audio/Battle.mp3" loop autoPlay />
+
       <div className="relative w-full max-w-screen-xl aspect-video">
-        {/* Fond de combat */}
         <img
           src="/images/BattleGround.png"
           alt="Battle Ground"
           className="absolute inset-0 w-full h-full object-cover"
         />
 
-        {/* Sprites Pokémon */}
         <img src={curOpp.data.sprites.front_default} style={oppStyle} alt="" />
         <img
           src={curPlayer.data.sprites.back_default}
@@ -170,7 +221,7 @@ export default function BattlePage() {
           alt=""
         />
 
-        {/* Barre de vie adversaire (haut gauche) */}
+        {/* Barres de PV */}
         <div className="absolute right-4 top-4 bg-black bg-opacity-50 p-2 rounded">
           <div className="text-white text-sm mb-1">
             {curOpp.data.name.toUpperCase()}
@@ -182,8 +233,6 @@ export default function BattlePage() {
             />
           </div>
         </div>
-
-        {/* Barre de vie joueur (bas droite) */}
         <div className="absolute left-4 top-4 bg-black bg-opacity-50 p-2 rounded text-right">
           <div className="text-white text-sm mb-1">
             {curPlayer.data.name.toUpperCase()}
@@ -198,9 +247,8 @@ export default function BattlePage() {
           </div>
         </div>
 
-        {/* Interface d’action (bas) */}
+        {/* Attaques & journal */}
         <div className="absolute bottom-0 w-full bg-gray-800 p-4 flex">
-          {/* Boutons 2×2 */}
           <div className="grid grid-cols-2 gap-2 w-1/3">
             {curPlayer.moves.map((m, i) => (
               <button
@@ -212,11 +260,10 @@ export default function BattlePage() {
                 {m.name}
               </button>
             ))}
-            {/* Remplissage si moins de 4 */}
             {curPlayer.moves.length < 4 &&
               Array.from({ length: 4 - curPlayer.moves.length }).map((_, i) => (
                 <button
-                  key={`empty-${i}`}
+                  key={i}
                   className="bg-gray-700 text-gray-400 py-2 rounded cursor-default"
                   disabled
                 >
@@ -224,7 +271,6 @@ export default function BattlePage() {
                 </button>
               ))}
           </div>
-          {/* Journal des actions */}
           <div className="flex-1 ml-4 bg-gray-700 text-white p-2 h-32 overflow-y-auto rounded">
             {log.map((t, i) => (
               <p key={i} className="text-sm">
