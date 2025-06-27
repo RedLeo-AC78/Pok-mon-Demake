@@ -188,18 +188,18 @@ export default function BattlePage() {
   const spriteSize = 96;
   const oppStyle = {
     position: "absolute" as const,
-    left: "60%",
-    top: "18%",
-    width: `${spriteSize}px`,
-    height: `${spriteSize}px`,
+    left: "65%",
+    top: "45%",
+    width: `150px`,
+    height: `150px`,
     transform: "translate(-50%,-50%)",
   };
   const playerStyle = {
     position: "absolute" as const,
-    left: "25%",
-    top: "62%",
-    width: `${spriteSize}px`,
-    height: `${spriteSize}px`,
+    left: "28%",
+    top: "60%",
+    width: `150px`,
+    height: `150px`,
     transform: "translate(-50%,-50%)",
   };
 
