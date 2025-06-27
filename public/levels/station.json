@@ -1,0 +1,24 @@
+{
+  "width": 20,
+  "height": 15,
+  "tiles": [
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+  ],
+  "blockedIds": [1],
+  "npcs": [
+    { "id": "barman", "x": 2, "y": 9, "dialog": "dialogs.json#barman" },
+    { "id": "client1", "x": 0, "y": 11, "dialog": "dialogs.json#client1" },
+    { "id": "tv", "x": 7, "y": 5, "dialog": "dialogs.json#tv" },
+    {
+      "id": "billy",
+      "x": 12,
+      "y": 12,
+      "dialogKey": "dialogs.json#billyChallenge"
+    }
+  ],
+  "boundsInside": { "minX": 1, "maxX": 18, "minY": 1, "maxY": 13 },
+  "exitLineY": 1
+}
