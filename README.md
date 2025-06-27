@@ -56,7 +56,6 @@ Pok-mon-Demake/
 │ ├─ station.json carte (grille, NPCs)
 │ └─ dialogs.json textes
 ├─ lib/db.ts connexion MySQL (optionnel)
-├─ .env.local variables d’environnement (MySQL)
 ├─ package.json
 └─ README.txt
 
