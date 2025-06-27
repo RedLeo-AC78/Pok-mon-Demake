@@ -21,7 +21,7 @@ Système de sauvegarde en localStorage (création, sauvegarde en jeu avec la tou
 📦 Installation
 
 Cloner le dépôt :
-git clone -b pre_prod https://github.com/RedLeo-AC78/Pok-mon-Demake.git
+git clone https://github.com/RedLeo-AC78/Pok-mon-Demake.git
 cd Pok-mon-Demake
 
 Installer les dépendances :
@@ -37,31 +37,9 @@ Démarrer le serveur de développement :
 npm run dev
 → http://localhost:3000
 
-📁 Structure du projet
-Pok-mon-Demake/
-├─ app/
-│ ├─ api/ (routes Next.js pour la sauvegarde, optionnelles)
-│ ├─ end/ écran de fin
-│ ├─ intro/ vidéo d’intro
-│ ├─ crea/ création et chargement
-│ ├─ game/ exploration & dialogue
-│ ├─ battle/ interface de combat
-│ └─ page.tsx écran titre
-├─ public/
-│ ├─ audio/ musiques
-│ ├─ images/ fonds & statiques
-│ ├─ sprites/ GIFs & sprites
-│ └─ videos/ intro.mp4
-├─ levels/
-│ ├─ station.json carte (grille, NPCs)
-│ └─ dialogs.json textes
-├─ lib/db.ts connexion MySQL (optionnel)
-├─ package.json
-└─ README.txt
-
 ⚙️ Configuration et options
-• Back-end MySQL (optionnel) : configurez lib/db.ts et .env.local, décommentez app/api/route.ts
-• .env.local :
+• Back-end MySQL (optionnel) : configurez lib/db.ts, décommentez app/api/route.ts
+•  :
 MYSQL_HOST=localhost
 MYSQL_USER=root
 MYSQL_PASS=your_password
