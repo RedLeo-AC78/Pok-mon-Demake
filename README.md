@@ -34,11 +34,9 @@ Ce projet propose :
 
 ## Installer les dépendances
 
-bash
-Copier
-Modifier
 npm install
-Vérifier l’arborescence public/
+
+## Vérifier l’arborescence public/
 
 public/audio/ :
 
