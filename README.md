@@ -102,26 +102,6 @@ Sur Windows (PowerShell ou cmd.exe), lancez en mode administrateur si besoin.
 
 Sur macOS/Linux, préfixez par sudo si vous rencontrez des problèmes de permissions.
 
-## 🗂️ Structure du projet
-
-Pok-mon-Demake/
-├─ app/
-│  ├─ api/        routes Next.js pour la sauvegarde (optionnel)
-│  ├─ intro/      page d’intro (vidéo)
-│  ├─ crea/       création & chargement de personnage
-│  ├─ game/       exploration & dialogues
-│  ├─ battle/     interface de combat
-│  ├─ end/        écran de fin
-│  └─ page.tsx    écran titre
-├─ public/
-│  ├─ audio/      musiques et sons
-│  ├─ images/     fonds & éléments statiques
-│  ├─ sprites/    GIFs de marche et autres sprites
-│  └─ videos/     intro.mp4
-├─ levels/        JSON de carte et dialogues
-├─ lib/           (optionnel) configuration DB
-├─ package.json
-└─ README.md
 
 ## 🚀 Extensions possibles
 Back-end MySQL via Next.js API Routes
